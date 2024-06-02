@@ -27,6 +27,7 @@ snakesDirection sDir; // 현재 뱀의 방향
 bool isGameOver; // 게임 종료 여부
 
 vector<pair<int, int>> obstacles; // 장애물 좌표를 저장할 벡터
+int obstaclesPerInterval; // 30초마다 추가할 장애물 수
 
 // 게임 초기화 함수
 void GameInit()
@@ -44,7 +45,7 @@ void GameInit()
 // 장애물을 랜덤하게 생성하는 함수
 void GenerateObstacles()
 {
-    int obstaclesToAdd = 3; // 30초마다 추가할 장애물 수
+    int obstaclesToAdd = obstaclesPerInterval; // 난이도에 따라 추가할 장애물 수
     while (obstaclesToAdd > 0) {
         int newObstacleX = rand() % width;
         int newObstacleY = rand() % height;
@@ -199,15 +200,19 @@ int SetDifficulty()
     switch (choice) {
     case 1:
         dfc = 150; // Easy: 150 밀리초
+        obstaclesPerInterval = 1; // Easy: 1개 장애물 추가
         break;
     case 2:
         dfc = 100; // Medium: 100 밀리초
+        obstaclesPerInterval = 2; // Medium: 2개 장애물 추가
         break;
     case 3:
         dfc = 50; // Hard: 50 밀리초
+        obstaclesPerInterval = 3; // Hard: 3개 장애물 추가
         break;
     default:
         dfc = 100; // 기본값: 중간 난이도
+        obstaclesPerInterval = 2; // Default: 2개 장애물 추가
     }
     return dfc;
 }
@@ -221,7 +226,7 @@ void UserInput()
             if (sDir != RIGHT) sDir = LEFT; // 오른쪽으로 이동 중이 아니면 왼쪽으로 이동
             break;
         case 'd':
-            if (sDir != LEFT) sDir = RIGHT; // 왼쪽으로 이동 중이 아니면 오른쪽으로 이동
+            if (sDir != LEFT) sDir = RIGHT; // 왼쪽으로 이동 중이 아니면 오른 쪽으로 이동
             break;
         case 'w':
             if (sDir != DOWN) sDir = UP; // 아래로 이동 중이 아니면 위로 이동
@@ -253,7 +258,7 @@ int main()
         chrono::duration<double> elapsed_seconds = current_time - start_time;
         int remaining_time = gameDuration - static_cast<int>(elapsed_seconds.count());
 
-        // 30초마다 장애물 3개 추가
+        // 30초마다 장애물 추가
         chrono::duration<double> obstacle_elapsed_seconds = current_time - lastObstacleTime;
         if (obstacle_elapsed_seconds.count() >= 30) {
             GenerateObstacles();
