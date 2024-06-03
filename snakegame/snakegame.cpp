@@ -1,53 +1,60 @@
-#include <iostream>
-#include <conio.h>
-#include <windows.h>
-#include <string>
-#include <chrono>
-#include <thread>
-#include <vector>
-#include <ctime>
-#include <fstream>
+#include <iostream>     // 표준 입출력 스트림을 위한 헤더 파일
+#include <conio.h>      // _kbhit() 및 _getch()로 키보드 입력을 감지하기 위한 헤더 파일
+#include <windows.h>    // 콘솔을 지우기 위해 system("cls")를 사용하기 위한 헤더 파일
+#include <string>       // 문자열 처리를 위한 헤더 파일
+#include <chrono>       // 시간 처리를 위한 헤더 파일
+#include <thread>       // this_thread::sleep_for로 게임 속도를 제어하기 위한 헤더 파일
+#include <vector>       // 장애물을 관리하기 위한 벡터 헤더 파일
+#include <ctime>        // 시간 처리를 위한 헤더 파일
+#include <fstream>      // 파일 입출력을 위한 헤더 파일
 
 using namespace std;
 
+// 게임 크기 및 지속 시간을 정의
 const int width = 80;
 const int height = 20;
-const int gameDuration = 180;
+const int gameDuration = 180; // 게임 지속 시간(초)
 
-int x, y;
-int fruitCordX, fruitCordY;
-int playerScore;
-int snakeTailX[100], snakeTailY[100];
-int snakeTailLen;
+// 게임 상태 변수 선언
+int x, y; // 뱀 머리 좌표
+int fruitCordX, fruitCordY; // 과일 좌표
+int playerScore; // 플레이어 점수
+int snakeTailX[100], snakeTailY[100]; // 뱀 꼬리 좌표
+int snakeTailLen; // 뱀 꼬리 길이
 string playerName;
-int dfc;
+int dfc; // 난이도 설정
 
+// 뱀의 방향 정의
 enum snakesDirection { STOP = 0, LEFT, RIGHT, UP, DOWN };
-snakesDirection sDir;
-bool isGameOver;
+snakesDirection sDir; // 현재 뱀의 방향
+bool isGameOver; // 게임 종료 여부
 
-vector<pair<int, int>> obstacles;
-int obstaclesPerInterval;
+vector<pair<int, int>> obstacles; // 장애물 좌표를 저장할 벡터
+int obstaclesPerInterval; // 30초마다 추가할 장애물 수
 
+// 게임 초기화 함수
 void GameInit()
 {
-    isGameOver = false;
-    sDir = STOP;
-    x = width / 2;
+    isGameOver = false; // 게임 종료 플래그 초기화
+    sDir = STOP; // 초기 방향을 STOP으로 설정
+    x = width / 2; // 뱀 머리 위치를 중앙으로 설정
     y = height / 2;
-    fruitCordX = rand() % width;
+    fruitCordX = rand() % width; // 과일 위치를 랜덤으로 설정
     fruitCordY = rand() % height;
-    playerScore = 0;
-    snakeTailLen = 0;
-    obstacles.clear();
+    playerScore = 0; // 플레이어 점수 초기화
+    snakeTailLen = 0; // 뱀 꼬리 길이 초기화
+    obstacles.clear(); // 장애물 초기화
 }
 
+// 장애물을 랜덤하게 생성하는 함수
 void GenerateObstacles()
 {
-    int obstaclesToAdd = obstaclesPerInterval;
+    int obstaclesToAdd = obstaclesPerInterval; // 난이도에 따라 추가할 장애물 수
     while (obstaclesToAdd > 0) {
         int newObstacleX = rand() % width;
         int newObstacleY = rand() % height;
+
+        // 장애물이 뱀의 머리나 꼬리 위치에 생성되지 않도록 확인
         bool conflict = false;
         if (newObstacleX == x && newObstacleY == y) {
             conflict = true;
@@ -65,68 +72,76 @@ void GenerateObstacles()
     }
 }
 
+// 게임 상태를 렌더링하는 함수
 void GameRender(string playerName, int remainingTime)
 {
-    string buffer;
+    string buffer; // 게임 화면을 만들 버퍼 생성
+
+    // 상단 경계 생성
     buffer += "+";
     for (int i = 0; i < width; i++)
         buffer += "-";
     buffer += "+\n";
 
+    // 게임 영역 생성
     for (int i = 0; i < height; i++) {
         buffer += "|";
         for (int j = 0; j < width; j++) {
             if (i == y && j == x)
-                buffer += "O";
+                buffer += "O"; // 뱀 머리 그리기
             else if (i == fruitCordY && j == fruitCordX)
-                buffer += "#";
+                buffer += "#"; // 과일 그리기
             else {
                 bool prTail = false;
                 for (int k = 0; k < snakeTailLen; k++) {
                     if (snakeTailX[k] == j && snakeTailY[k] == i) {
-                        buffer += "o";
+                        buffer += "o"; // 뱀 꼬리 그리기
                         prTail = true;
-                        break;
+                        break; // 중복 검사를 피하기 위해 break
                     }
                 }
                 if (!prTail) {
                     bool isObstacle = false;
                     for (int k = 0; k < obstacles.size(); k++) {
                         if (obstacles[k].first == j && obstacles[k].second == i) {
-                            buffer += "!";
+                            buffer += "!"; // 장애물 그리기;
                             isObstacle = true;
                             break;
                         }
                     }
                     if (!isObstacle)
-                        buffer += " ";
+                        buffer += " "; // 빈 공간 그리기
                 }
             }
         }
-        buffer += "|\n";
+        buffer += "|\n"; // 줄 끝 경계
     }
 
+    // 하단 경계 생성
     buffer += "+";
     for (int i = 0; i < width; i++)
         buffer += "-";
     buffer += "+\n";
 
+    // 점수 및 남은 시간 표시
     buffer += playerName + "'s Score: " + to_string(playerScore) + "\n";
     buffer += "Remaining Time: " + to_string(remainingTime) + " seconds\n";
     buffer += "Press 'q' to Save & Exit\n";
 
-    system("cls");
-    cout << buffer;
+    system("cls"); // 콘솔 지우기
+    cout << buffer; // 콘솔에 버퍼 출력
 }
 
+// 게임 상태를 업데이트하는 함수
 void UpdateGame()
 {
-    int prevX = snakeTailX[0];
+    int prevX = snakeTailX[0]; // 이전 머리 위치 저장
     int prevY = snakeTailY[0];
     int prev2X, prev2Y;
-    snakeTailX[0] = x;
+    snakeTailX[0] = x; // 머리 위치를 꼬리 앞에 이동
     snakeTailY[0] = y;
 
+    // 꼬리 이동
     for (int i = 1; i < snakeTailLen; i++) {
         prev2X = snakeTailX[i];
         prev2Y = snakeTailY[i];
@@ -153,28 +168,33 @@ void UpdateGame()
         break;
     }
 
-    if (x >= width) x = 0; else if (x < 0) x = width - 1;
-    if (y >= height) y = 0; else if (y < 0) y = height - 1;
+    // 벽과의 충돌 검사
+    if (x >= width || x < 0 || y >= height || y < 0) {
+        isGameOver = true;
+    }
 
+    // 꼬리와의 충돌 검사
     for (int i = 0; i < snakeTailLen; i++) {
         if (snakeTailX[i] == x && snakeTailY[i] == y)
             isGameOver = true;
     }
 
+    // 장애물과의 충돌 검사
     for (int i = 0; i < obstacles.size(); i++) {
         if (obstacles[i].first == x && obstacles[i].second == y)
             isGameOver = true;
     }
 
+    // 뱀이 과일을 먹었는지 검사
     if (x == fruitCordX && y == fruitCordY) {
-        playerScore += 10;
-        fruitCordX = rand() % width;
+        playerScore += 10; // 점수 증가
+        fruitCordX = rand() % width; // 과일 위치 재설정
         fruitCordY = rand() % height;
-        snakeTailLen++;
+        snakeTailLen++; // 꼬리 길이 증가
     }
 }
 
-
+// 게임 난이도를 설정하는 함수
 int SetDifficulty()
 {
     int choice;
@@ -185,24 +205,25 @@ int SetDifficulty()
     cin >> choice;
     switch (choice) {
     case 1:
-        dfc = 150;
+        dfc = 150; // Easy: 150 밀리초
         obstaclesPerInterval = 1;
         break;
     case 2:
-        dfc = 100;
+        dfc = 100; // Medium: 100 밀리초
         obstaclesPerInterval = 2;
         break;
     case 3:
-        dfc = 50;
+        dfc = 50; // Hard: 50 밀리초
         obstaclesPerInterval = 3;
         break;
     default:
-        dfc = 100;
+        dfc = 100; // 기본값: Medium
         obstaclesPerInterval = 2;
     }
     return dfc;
 }
 
+// 사용자 입력을 처리하는 함수
 void UserInput(bool& saveAndQuit)
 {
     if (_kbhit()) {
@@ -230,6 +251,7 @@ void UserInput(bool& saveAndQuit)
     }
 }
 
+// 점수를 파일에 저장하는 함수
 void SaveGameState(const string& filename)
 {
     ofstream outFile(filename);
