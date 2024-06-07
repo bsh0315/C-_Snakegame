@@ -1,375 +1,466 @@
-#include <iostream>     // 표준 입출력 스트림을 위한 헤더 파일
-#include <conio.h>      // _kbhit() 및 _getch()로 키보드 입력을 감지하기 위한 헤더 파일
-#include <windows.h>    // 콘솔을 지우기 위해 system("cls")를 사용하기 위한 헤더 파일
-#include <string>       // 문자열 처리를 위한 헤더 파일
-#include <chrono>       // 시간 처리를 위한 헤더 파일
-#include <thread>       // this_thread::sleep_for로 게임 속도를 제어하기 위한 헤더 파일
-#include <vector>       // 장애물을 관리하기 위한 벡터 헤더 파일
-#include <ctime>        // 시간 처리를 위한 헤더 파일
-#include <fstream>      // 파일 입출력을 위한 헤더 파일
+#include <iostream>
+#include <conio.h>
+#include <thread>
+#include <vector>
+#include <chrono>
+#include <cstdlib>
+#include <ctime>
+#include <fstream>
 
 using namespace std;
 
-// 게임 크기 및 지속 시간을 정의
-const int width = 80;
+// Constants for the game board size
+const int width = 70;
 const int height = 20;
-const int gameDuration = 180; // 게임 지속 시간(초)
 
-// 게임 상태 변수 선언
-int x, y; // 뱀 머리 좌표
-int fruitCordX, fruitCordY; // 과일 좌표
-int playerScore; // 플레이어 점수
-int snakeTailX[100], snakeTailY[100]; // 뱀 꼬리 좌표
-int snakeTailLen; // 뱀 꼬리 길이
-string playerName;
-int dfc; // 난이도 설정
-
-// 뱀의 방향 정의
+// Enumeration for direction control
 enum snakesDirection { STOP = 0, LEFT, RIGHT, UP, DOWN };
-snakesDirection sDir; // 현재 뱀의 방향
-bool isGameOver; // 게임 종료 여부
 
-vector<pair<int, int>> obstacles; // 장애물 좌표를 저장할 벡터
-int obstaclesPerInterval; // 30초마다 추가할 장애물 수
+// Define the Player class
+class Player {
+public:
+    string name;
+    int x, y;
+    int score;
+    int tailX[100], tailY[100];
+    int tailLen;
+    snakesDirection direction;
+    bool isGameOver;
 
-// 게임 초기화 함수
-void GameInit()
-{
-    isGameOver = false; // 게임 종료 플래그 초기화
-    sDir = STOP; // 초기 방향을 STOP으로 설정
-    x = width / 2; // 뱀 머리 위치를 중앙으로 설정
-    y = height / 2;
-    fruitCordX = rand() % width; // 과일 위치를 랜덤으로 설정
-    fruitCordY = rand() % height;
-    playerScore = 0; // 플레이어 점수 초기화
-    snakeTailLen = 0; // 뱀 꼬리 길이 초기화
-    obstacles.clear(); // 장애물 초기화
-}
+    // Constructor for initializing the player with a name
+    Player(string playerName) : name(playerName), score(0), tailLen(0), direction(STOP), isGameOver(false) {
+        x = width / 2;
+        y = height / 2;
+    }
 
-// 장애물을 랜덤하게 생성하는 함수
-void GenerateObstacles()
-{
-    int obstaclesToAdd = obstaclesPerInterval; // 난이도에 따라 추가할 장애물 수
-    while (obstaclesToAdd > 0) {
-        int newObstacleX = rand() % width;
-        int newObstacleY = rand() % height;
+    // Function to reset the player's state
+    void reset() {
+        score = 0;
+        tailLen = 0;
+        direction = STOP;
+        isGameOver = false;
+        x = width / 2;
+        y = height / 2;
+    }
 
-        // 장애물이 뱀의 머리나 꼬리 위치에 생성되지 않도록 확인
-        bool conflict = false;
-        if (newObstacleX == x && newObstacleY == y) {
-            conflict = true;
+    // Function to update the player's position based on the direction
+    void updatePosition() {
+        int prevX = tailX[0];
+        int prevY = tailY[0];
+        int prev2X, prev2Y;
+        tailX[0] = x;
+        tailY[0] = y;
+
+        for (int i = 1; i < tailLen; i++) {
+            prev2X = tailX[i];
+            prev2Y = tailY[i];
+            tailX[i] = prevX;
+            tailY[i] = prevY;
+            prevX = prev2X;
+            prevY = prev2Y;
         }
-        for (int i = 0; i < snakeTailLen; i++) {
-            if (newObstacleX == snakeTailX[i] && newObstacleY == snakeTailY[i]) {
-                conflict = true;
-                break;
-            }
+
+        switch (direction) {
+        case LEFT:
+            x--;
+            break;
+        case RIGHT:
+            x++;
+            break;
+        case UP:
+            y--;
+            break;
+        case DOWN:
+            y++;
+            break;
+        default:
+            break;
         }
-        if (!conflict) {
-            obstacles.push_back(make_pair(newObstacleX, newObstacleY));
-            obstaclesToAdd--;
+
+        if (x >= width || x < 0 || y >= height || y < 0) {
+            isGameOver = true;
         }
+
+        for (int i = 0; i < tailLen; i++) {
+            if (tailX[i] == x && tailY[i] == y)
+                isGameOver = true;
+        }
+    }
+
+    // Function to increase the player's score and tail length
+    void increaseScore() {
+        score += 10;
+        tailLen++;
+    }
+};
+
+// Global variables for game state
+int fruitCordX, fruitCordY;
+int gameDuration = 180; // Game duration in seconds
+vector<pair<int, int>> obstacles; // List of obstacle coordinates
+
+// Function to set the difficulty level of the game
+int SetDifficulty(int& obstacleCount, int& obstacleIncrement) {
+    int difficulty;
+    cout << "Select difficulty level (1: Easy, 2: Medium, 3: Hard): ";
+    cin >> difficulty;
+
+    switch (difficulty) {
+    case 1:
+        obstacleCount = 0;
+        obstacleIncrement = 1;
+        return 90; // Easy
+    case 2:
+        obstacleCount = 0;
+        obstacleIncrement = 2;
+        return 65;  // Medium
+    case 3:
+        obstacleCount = 0;
+        obstacleIncrement = 3;
+        return 35;  // Hard
+    default:
+        obstacleCount = 0;
+        obstacleIncrement = 2;
+        return 50;  // Default to Medium
     }
 }
 
-// 게임 상태를 렌더링하는 함수
-void GameRender(string playerName, int remainingTime)
-{
-    string buffer; // 게임 화면을 만들 버퍼 생성
+// Function to generate fruit coordinates randomly
+void GenerateFruit() {
+    fruitCordX = rand() % width;
+    fruitCordY = rand() % height;
+}
 
-    // 상단 경계 생성
+// Function to generate obstacles at random positions based on difficulty
+void GenerateObstacles(int obstacleCount, const vector<Player>& players) {
+    for (int i = 0; i < obstacleCount; i++) {
+        int obsX, obsY;
+        bool safeDistance;
+        do {
+            safeDistance = true;
+            obsX = rand() % width;
+            obsY = rand() % height;
+
+            // Check if the obstacle is too close to any player or the fruit
+            for (const auto& player : players) {
+                if (abs(player.x - obsX) < 3 && abs(player.y - obsY) < 3) {
+                    safeDistance = false;
+                    break;
+                }
+                for (int j = 0; j < player.tailLen; j++) {
+                    if (abs(player.tailX[j] - obsX) < 3 && abs(player.tailY[j] - obsY) < 3) {
+                        safeDistance = false;
+                        break;
+                    }
+                }
+            }
+            if (abs(fruitCordX - obsX) < 3 && abs(fruitCordY - obsY) < 3) {
+                safeDistance = false;
+            }
+        } while (!safeDistance);
+
+        obstacles.push_back(make_pair(obsX, obsY));
+    }
+}
+
+// Function to render the game state onto the screen
+void GameRender(const vector<Player>& players, int remainingTime) {
+    string buffer;
+
     buffer += "+";
     for (int i = 0; i < width; i++)
         buffer += "-";
     buffer += "+\n";
 
-    // 게임 영역 생성
     for (int i = 0; i < height; i++) {
         buffer += "|";
         for (int j = 0; j < width; j++) {
-            if (i == y && j == x)
-                buffer += "O"; // 뱀 머리 그리기
-            else if (i == fruitCordY && j == fruitCordX)
-                buffer += "#"; // 과일 그리기
-            else {
-                bool prTail = false;
-                for (int k = 0; k < snakeTailLen; k++) {
-                    if (snakeTailX[k] == j && snakeTailY[k] == i) {
-                        buffer += "o"; // 뱀 꼬리 그리기
-                        prTail = true;
-                        break; // 중복 검사를 피하기 위해 break
+            bool drawn = false;
+            for (const auto& player : players) {
+                if (i == player.y && j == player.x) {
+                    buffer += "O";
+                    drawn = true;
+                    break;
+                }
+                for (int k = 0; k < player.tailLen; k++) {
+                    if (player.tailX[k] == j && player.tailY[k] == i) {
+                        buffer += "o";
+                        drawn = true;
+                        break;
                     }
                 }
-                if (!prTail) {
+            }
+            if (!drawn) {
+                if (i == fruitCordY && j == fruitCordX)
+                    buffer += "#";
+                else {
                     bool isObstacle = false;
-                    for (int k = 0; k < obstacles.size(); k++) {
-                        if (obstacles[k].first == j && obstacles[k].second == i) {
-                            buffer += "!"; // 장애물 그리기;
+                    for (const auto& obstacle : obstacles) {
+                        if (obstacle.first == j && obstacle.second == i) {
+                            buffer += "!";
                             isObstacle = true;
                             break;
                         }
                     }
                     if (!isObstacle)
-                        buffer += " "; // 빈 공간 그리기
+                        buffer += " ";
                 }
             }
         }
-        buffer += "|\n"; // 줄 끝 경계
+        buffer += "|\n";
     }
 
-    // 하단 경계 생성
     buffer += "+";
     for (int i = 0; i < width; i++)
         buffer += "-";
     buffer += "+\n";
 
-    // 점수 및 남은 시간 표시
-    buffer += playerName + "'s Score: " + to_string(playerScore) + "\n";
+    for (const auto& player : players) {
+        buffer += player.name + "'s Score: " + to_string(player.score) + "\n";
+    }
     buffer += "Remaining Time: " + to_string(remainingTime) + " seconds\n";
     buffer += "Press 'q' to Save & Exit\n";
 
-    system("cls"); // 콘솔 지우기
-    cout << buffer; // 콘솔에 버퍼 출력
+    system("cls");
+    cout << buffer;
 }
 
-// 게임 상태를 업데이트하는 함수
-void UpdateGame()
-{
-    int prevX = snakeTailX[0]; // 이전 머리 위치 저장
-    int prevY = snakeTailY[0];
-    int prev2X, prev2Y;
-    snakeTailX[0] = x; // 머리 위치를 꼬리 앞에 이동
-    snakeTailY[0] = y;
-
-    // 꼬리 이동
-    for (int i = 1; i < snakeTailLen; i++) {
-        prev2X = snakeTailX[i];
-        prev2Y = snakeTailY[i];
-        snakeTailX[i] = prevX;
-        snakeTailY[i] = prevY;
-        prevX = prev2X;
-        prevY = prev2Y;
-    }
-
-    switch (sDir) {
-    case LEFT:
-        x--;
-        break;
-    case RIGHT:
-        x++;
-        break;
-    case UP:
-        y--;
-        break;
-    case DOWN:
-        y++;
-        break;
-    default:
-        break;
-    }
-
-    // 벽과의 충돌 검사
-    if (x >= width || x < 0 || y >= height || y < 0) {
-        isGameOver = true;
-    }
-
-    // 꼬리와의 충돌 검사
-    for (int i = 0; i < snakeTailLen; i++) {
-        if (snakeTailX[i] == x && snakeTailY[i] == y)
-            isGameOver = true;
-    }
-
-    // 장애물과의 충돌 검사
-    for (int i = 0; i < obstacles.size(); i++) {
-        if (obstacles[i].first == x && obstacles[i].second == y)
-            isGameOver = true;
-    }
-
-    // 뱀이 과일을 먹었는지 검사
-    if (x == fruitCordX && y == fruitCordY) {
-        playerScore += 10; // 점수 증가
-        fruitCordX = rand() % width; // 과일 위치 재설정
-        fruitCordY = rand() % height;
-        snakeTailLen++; // 꼬리 길이 증가
-    }
-}
-
-// 게임 난이도를 설정하는 함수
-int SetDifficulty()
-{
-    int choice;
-    cout << "\nSET DIFFICULTY\n1: Easy\n2: Medium\n3: Hard "
-        "\nNOTE: if not chosen or pressed any other "
-        "key, the difficulty will be automatically set "
-        "to medium\nChoose difficulty level: ";
-    cin >> choice;
-    switch (choice) {
-    case 1:
-        dfc = 150; // Easy: 150 밀리초
-        obstaclesPerInterval = 1;
-        break;
-    case 2:
-        dfc = 100; // Medium: 100 밀리초
-        obstaclesPerInterval = 2;
-        break;
-    case 3:
-        dfc = 50; // Hard: 50 밀리초
-        obstaclesPerInterval = 3;
-        break;
-    default:
-        dfc = 100; // 기본값: Medium
-        obstaclesPerInterval = 2;
-    }
-    return dfc;
-}
-
-// 사용자 입력을 처리하는 함수
-void UserInput(bool& saveAndQuit)
-{
+// Function to handle user input for controlling the players
+void UserInput(vector<Player>& players, bool& saveAndQuit) {
     if (_kbhit()) {
         switch (_getch()) {
         case 'a':
-            if (sDir != RIGHT) sDir = LEFT;
+            if (players[0].direction != RIGHT) players[0].direction = LEFT;
             break;
         case 'd':
-            if (sDir != LEFT) sDir = RIGHT;
+            if (players[0].direction != LEFT) players[0].direction = RIGHT;
             break;
         case 'w':
-            if (sDir != DOWN) sDir = UP;
+            if (players[0].direction != DOWN) players[0].direction = UP;
             break;
         case 's':
-            if (sDir != UP) sDir = DOWN;
+            if (players[0].direction != UP) players[0].direction = DOWN;
             break;
-        case 'x':
-            isGameOver = true;
+        case 'j':
+            if (players[1].direction != RIGHT) players[1].direction = LEFT;
+            break;
+        case 'l':
+            if (players[1].direction != LEFT) players[1].direction = RIGHT;
+            break;
+        case 'i':
+            if (players[1].direction != DOWN) players[1].direction = UP;
+            break;
+        case 'k':
+            if (players[1].direction != UP) players[1].direction = DOWN;
             break;
         case 'q':
             saveAndQuit = true;
-            isGameOver = true;
+            for (auto& player : players) {
+                player.isGameOver = true;
+            }
             break;
         }
     }
 }
 
-// 점수를 파일에 저장하는 함수
-void SaveGameState(const string& filename)
-{
-    ofstream outFile(filename);
-    if (outFile.is_open()) {
-        outFile << playerName << "\n";
-        outFile << dfc << "\n";
-        outFile << x << " " << y << " " << fruitCordX << " " << fruitCordY << " "
-            << playerScore << " " << snakeTailLen << " " << static_cast<int>(sDir) << " " << obstacles.size() << "\n";
-        for (int i = 0; i < snakeTailLen; i++) {
-            outFile << snakeTailX[i] << " " << snakeTailY[i] << " ";
-        }
-        outFile << "\n";
-        for (const auto& obstacle : obstacles) {
-            outFile << obstacle.first << " " << obstacle.second << " ";
-        }
-        outFile.close();
-        cout << "Game state saved to " << filename << endl;
-    }
-    else {
-        cout << "Unable to open file for saving.\n";
-    }
-}
-
-void LoadGameState(const string& filename)
-{
-    ifstream inFile(filename);
-    if (inFile.is_open()) {
-        int dir, obstacleCount;
-        inFile >> playerName;
-        inFile >> dfc;
-        inFile >> x >> y >> fruitCordX >> fruitCordY >> playerScore >> snakeTailLen >> dir >> obstacleCount;
-        sDir = static_cast<snakesDirection>(dir);
-        for (int i = 0; i < snakeTailLen; i++) {
-            inFile >> snakeTailX[i] >> snakeTailY[i];
-        }
-        obstacles.clear();
-        for (int i = 0; i < obstacleCount; i++) {
-            int obsX, obsY;
-            inFile >> obsX >> obsY;
-            obstacles.push_back(make_pair(obsX, obsY));
-        }
-        inFile.close();
-        cout << "Game state loaded from " << filename << endl;
-    }
-    else {
-        cout << "Unable to open file for loading.\n";
-    }
-}
-
-void ShowMenu()
-{
-    cout << "1. Start New Game\n";
-    cout << "2. Load Game\n";
-    cout << "3. Exit\n";
+// Function to show the main menu
+void ShowMenu() {
+    cout << "1. Start New Game (Single Player)\n";
+    cout << "2. Start New Game (Multiplayer)\n";
+    cout << "3. Load Game\n";
+    cout << "4. Exit\n";
     cout << "Enter your choice: ";
 }
 
-int main()
-{
+// Function to save the current game state to a file
+void SaveGameState(const string& filename, const vector<Player>& players, int remainingTime, int dfc, int obstacleCount) {
+    ofstream file(filename);
+    if (file.is_open()) {
+                file << players.size() << endl;
+        for (const auto& player : players) {
+            file << player.name << " " << player.x << " " << player.y << " " << player.score << " " << player.tailLen << " " << player.direction << endl;
+            for (int i = 0; i < player.tailLen; i++) {
+                file << player.tailX[i] << " " << player.tailY[i] << " ";
+            }
+            file << endl;
+        }
+        file << fruitCordX << " " << fruitCordY << endl;
+        file << obstacles.size() << endl;
+        for (const auto& obstacle : obstacles) {
+            file << obstacle.first << " " << obstacle.second << " ";
+        }
+        file << endl;
+        file << remainingTime << endl;
+        file << dfc << endl;
+        file << obstacleCount << endl;
+        file.close();
+    }
+}
+
+// Function to load a game state from a file
+void LoadGameState(const string& filename, vector<Player>& players, int& remainingTime, int& dfc, int& obstacleCount) {
+    ifstream file(filename);
+    if (file.is_open()) {
+        int numPlayers;
+        file >> numPlayers;
+        players.clear();
+        for (int i = 0; i < numPlayers; i++) {
+            string name;
+            int x, y, score, tailLen, direction;
+            file >> name >> x >> y >> score >> tailLen >> direction;
+            Player player(name);
+            player.x = x;
+            player.y = y;
+            player.score = score;
+            player.tailLen = tailLen;
+            player.direction = static_cast<snakesDirection>(direction);
+            for (int j = 0; j < tailLen; j++) {
+                file >> player.tailX[j] >> player.tailY[j];
+            }
+            players.push_back(player);
+        }
+        file >> fruitCordX >> fruitCordY;
+        int numObstacles;
+        file >> numObstacles;
+        obstacles.clear();
+        for (int i = 0; i < numObstacles; i++) {
+            int obsX, obsY;
+            file >> obsX >> obsY;
+            obstacles.push_back(make_pair(obsX, obsY));
+        }
+        file >> remainingTime;
+        file >> dfc;
+        file >> obstacleCount;
+        file.close();
+    }
+}
+
+int main() {
     srand(unsigned(time(NULL)));
     int choice;
     string filename = "gamestate.txt";
+    vector<Player> players;
+    int obstacleCount; // Number of obstacles
+    int obstacleIncrement; // Number of obstacles to add periodically
+    int dfc = 50; // Default difficulty level
 
     ShowMenu();
     cin >> choice;
 
     switch (choice) {
-    case 1:
+    case 1: {
+        string playerName;
         cout << "Enter your name: ";
         cin >> playerName;
-        GameInit();
-        dfc = SetDifficulty();
+        players.push_back(Player(playerName));
+        players[0].reset();
+        dfc = SetDifficulty(obstacleCount, obstacleIncrement); // Set difficulty and initial obstacle count
         break;
-    case 2:
-        LoadGameState(filename);
+    }
+    case 2: {
+        string playerName1, playerName2;
+        cout << "Enter Player 1 name: ";
+        cin >> playerName1;
+        cout << "Enter Player 2 name: ";
+        cin >> playerName2;
+        players.push_back(Player(playerName1));
+        players.push_back(Player(playerName2));
+        players[0].reset();
+        players[1].reset();
+        // Set initial positions for players to avoid collision
+        players[1].x = players[0].x - 1;
+        players[1].y = players[0].y;
+        dfc = SetDifficulty(obstacleCount, obstacleIncrement); // Set difficulty and initial obstacle count
         break;
-    case 3:
+    }
+    case 3: {
+        LoadGameState(filename, players, gameDuration, dfc, obstacleCount);
+        break;
+    }
+    case 4:
         return 0;
     default:
         cout << "Invalid choice.\n";
         return 0;
     }
 
+    GenerateFruit(); // Generate initial fruit
+
     auto start_time = chrono::steady_clock::now();
     auto lastObstacleTime = start_time;
     bool saveAndQuit = false;
 
-    while (!isGameOver) {
+    while (true) {
         auto current_time = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds = current_time - start_time;
         int remaining_time = gameDuration - static_cast<int>(elapsed_seconds.count());
 
         chrono::duration<double> obstacle_elapsed_seconds = current_time - lastObstacleTime;
         if (obstacle_elapsed_seconds.count() >= 30) {
-            GenerateObstacles();
+            GenerateObstacles(obstacleIncrement, players); // Add new obstacles periodically
             lastObstacleTime = current_time;
         }
 
-        GameRender(playerName, remaining_time);
+        bool anyGameOver = false;
+        for (auto& player : players) {
+            if (!player.isGameOver) {
+                player.updatePosition();
 
-        if (remaining_time <= 0) {
-            cout << "Time's up! Game over." << endl;
-            isGameOver = true;
+                // Check if the player has eaten the fruit
+                if (player.x == fruitCordX && player.y == fruitCordY) {
+                    player.increaseScore();
+                    GenerateFruit(); // Generate a new fruit
+                }
+                // Check if the player hits an obstacle
+                for (const auto& obstacle : obstacles) {
+                    if (player.x == obstacle.first && player.y == obstacle.second) {
+                        player.isGameOver = true;
+                        anyGameOver = true;
+                    }
+                }
+            }
+            if (player.isGameOver) {
+                anyGameOver = true;
+            }
+        }
+
+        // Check for collisions between snakes
+        for (size_t i = 0; i < players.size(); i++) {
+            for (size_t j = 0; j < players.size(); j++) {
+                if (i != j) {
+                    // Check if players[i] collides with players[j]
+                    if (players[i].x == players[j].x && players[i].y == players[j].y) {
+                        players[i].isGameOver = true;
+                        players[j].isGameOver = true;
+                        anyGameOver = true;
+                    }
+                    for (int k = 0; k < players[j].tailLen; k++) {
+                        if (players[i].x == players[j].tailX[k] && players[i].y == players[j].tailY[k]) {
+                            players[i].isGameOver = true;
+                            anyGameOver = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        GameRender(players, remaining_time);
+
+        if (remaining_time <= 0 || anyGameOver) {
+            cout << "Game over." << endl;
             break;
         }
 
-        UserInput(saveAndQuit);
-        UpdateGame();
+        UserInput(players, saveAndQuit);
 
-        auto end = chrono::steady_clock::now();
-        chrono::duration<double> frame_duration = end - current_time;
-        this_thread::sleep_for(chrono::milliseconds(dfc) - frame_duration);
+        if (saveAndQuit) {
+            SaveGameState(filename, players, remaining_time, dfc, obstacleCount);
+            break;
+        }
+
+        this_thread::sleep_for(chrono::milliseconds(dfc));
     }
 
-    if (saveAndQuit) {
-        SaveGameState(filename);
-    }
-
-    cout << "Final Score: " << playerScore << endl;
     return 0;
 }
+
