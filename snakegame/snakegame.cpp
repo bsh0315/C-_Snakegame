@@ -122,7 +122,7 @@ int SetDifficulty(int& obstacleCount, int& obstacleIncrement) {
     default:
         obstacleCount = 0;
         obstacleIncrement = 2;
-        return 50;  // Default to Medium
+        return 65;  // Default to Medium
     }
 }
 
