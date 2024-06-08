@@ -274,10 +274,10 @@ void ShowMenu() {
 }
 
 // Function to save the current game state to a file
-void SaveGameState(const string& filename, const vector<Player>& players, int remainingTime, int dfc, int obstacleCount) {
+void SaveGameState(const string& filename, const vector<Player>& players, int remainingTime, int dfc, int obstacleCount, int obstacleIncrement) {
     ofstream file(filename);
     if (file.is_open()) {
-                file << players.size() << endl;
+        file << players.size() << endl;
         for (const auto& player : players) {
             file << player.name << " " << player.x << " " << player.y << " " << player.score << " " << player.tailLen << " " << player.direction << endl;
             for (int i = 0; i < player.tailLen; i++) {
@@ -294,12 +294,13 @@ void SaveGameState(const string& filename, const vector<Player>& players, int re
         file << remainingTime << endl;
         file << dfc << endl;
         file << obstacleCount << endl;
+        file << obstacleIncrement << endl; // Save obstacleIncrement
         file.close();
     }
 }
 
 // Function to load a game state from a file
-void LoadGameState(const string& filename, vector<Player>& players, int& remainingTime, int& dfc, int& obstacleCount) {
+void LoadGameState(const string& filename, vector<Player>& players, int& remainingTime, int& dfc, int& obstacleCount, int& obstacleIncrement) {
     ifstream file(filename);
     if (file.is_open()) {
         int numPlayers;
@@ -332,6 +333,7 @@ void LoadGameState(const string& filename, vector<Player>& players, int& remaini
         file >> remainingTime;
         file >> dfc;
         file >> obstacleCount;
+        file >> obstacleIncrement; // Load obstacleIncrement
         file.close();
     }
 }
@@ -375,7 +377,7 @@ int main() {
         break;
     }
     case 3: {
-        LoadGameState(filename, players, gameDuration, dfc, obstacleCount);
+        LoadGameState(filename, players, gameDuration, dfc, obstacleCount, obstacleIncrement); // Pass obstacleIncrement
         break;
     }
     case 4:
@@ -455,7 +457,7 @@ int main() {
         UserInput(players, saveAndQuit);
 
         if (saveAndQuit) {
-            SaveGameState(filename, players, remaining_time, dfc, obstacleCount);
+            SaveGameState(filename, players, remaining_time, dfc, obstacleCount, obstacleIncrement);
             break;
         }
 
@@ -464,4 +466,3 @@ int main() {
 
     return 0;
 }
-
